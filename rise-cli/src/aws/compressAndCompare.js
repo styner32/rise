@@ -15,7 +15,11 @@ const rise = require('rise-framework');
 const appModule = require('./app'),
       functionModule = require('./#{FUNCTION_PATH}');
 
-exports.handle = rise.wrap.amazon(functionModule, appModule, {});`;
+exports.handle = rise.wrap.amazon(functionModule, appModule, {});`,
+      riseBareIndexJSTemplate = `
+const functionModule = require('./#{FUNCTION_PATH}');
+
+exports.handle = functionModule.handle;`;
 
 module.exports = function compressAndCompare(session) {
   if (!session.functions || Object.keys(session.functions).length === 0) {
@@ -72,8 +76,13 @@ module.exports = function compressAndCompare(session) {
           excludePatterns.push(session.functions[funcName].exclude);
         }
 
+        let bare = false;
+        if (session.functions[funcName] && typeof session.functions[funcName].bare === 'boolean') {
+          bare = session.functions[funcName].bare;
+        }
+
         session.state = 'COMPRESSING';
-        compressPromises.push(compress(session, funcName, excludePatterns));
+        compressPromises.push(compress(session, funcName, excludePatterns, bare));
       }
 
       return Promise.all(compressPromises);
@@ -91,7 +100,7 @@ module.exports = function compressAndCompare(session) {
     });
 };
 
-function compress(session, functionName, excludePatterns) {
+function compress(session, functionName, excludePatterns, bare) {
   return new Promise((resolve, reject) => {
     process.nextTick(function() {
       log.info(`Compressing ${functionName}...`);
@@ -128,7 +137,12 @@ function compress(session, functionName, excludePatterns) {
       zipArchive.directory(functionPath);
       zipArchive.glob("**/*", { ignore: excludePatterns.concat(['functions/**']) });
 
-      const indexJS = riseIndexJSTemplate.replace(/\#\{FUNCTION_PATH\}/, functionPath);
+      let indexJS;
+      if (bare) {
+        indexJS = riseBareIndexJSTemplate.replace(/\#\{FUNCTION_PATH\}/, functionPath);
+      } else {
+        indexJS = riseIndexJSTemplate.replace(/\#\{FUNCTION_PATH\}/, functionPath);
+      }
 
       zipArchive.append(indexJS, { name: 'index.js' });
       zipArchive.finalize();

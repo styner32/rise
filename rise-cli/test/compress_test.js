@@ -197,6 +197,65 @@ exports.handle = rise.wrap.amazon(functionModule, appModule, {});`;
       });
   });
 
+  context("when bare is true", function() {
+    beforeEach(function() {
+      session.functions.listTasks.bare = true;
+      session.functions.createTasks = { bare: true };
+    });
+
+    it("does not wrap", function() {
+      const expectedFiles = {
+        listTasks: [
+          "functions/listTasks/index.js",
+          "routes.yaml",
+          "rise.yaml",
+          "index.js",
+          "lib/",
+          "lib/lib.js"
+        ],
+        createTasks: [
+          "functions/createTasks/create.js",
+          "routes.yaml",
+          "rise.yaml",
+          "index.js",
+          "lib/",
+          "lib/lib.js",
+          "README.md"
+        ]
+      };
+
+      return compressAndCompare(session)
+        .then(function(session) {
+          expect(session.compressedFunctions).to.have.length(2);
+          for (let i = 0; i < session.compressedFunctions.length; ++i) {
+            const p = session.compressedFunctions[i];
+            expect(p.filePath).to.exist;
+            expect(fs.statSync(p.filePath)).to.not.be.null;
+            expect(p.uploadPath).to.exist;
+
+            const entries = new unzip(p.filePath).getEntries();
+            expect(entries).to.not.be.empty;
+
+            const paths = [];
+            for (let j = 0; j < entries.length; j++) {
+              const content = entries[j].getData().toString();
+              if (!entries[j].isDirectory && entries[j].entryName !== 'index.js') {
+                expect(fsReadFile(entries[j].entryName)).to.equal(content);
+              } else if (entries[j].entryName === 'index.js') {
+                const expected = `
+const functionModule = require('./functions/${p.functionName}');
+
+exports.handle = functionModule.handle;`;
+                expect(content).to.equal(expected);
+              }
+              paths.push(entries[j].entryName);
+            }
+            expect(paths).same.members(expectedFiles[p.functionName]);
+          }
+        });
+    });
+  });
+
   context("when the checksum is same as current version", function() {
     beforeEach(function() {
       const checksum = require('../src/utils/checksum');

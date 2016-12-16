@@ -2,12 +2,20 @@
 
 module.exports = function pingFunctions(session) {
   const lambda = session.aws.lambda,
-        stackName = session.stackName;
+        stackName = session.stackName,
+        functionNamesToPing = [];
 
   session.state = 'PINGING';
+  for (const name of Object.keys(session.functions)) {
+    if (session.functions[name] && session.functions[name].bare) {
+      continue;
+    }
+    functionNamesToPing.push(name);
+  }
+
   return lambda.listFunctions({}).promise()
     .then(function(data) {
-      return pingPromiseAll(lambda, stackName, session.compressedFunctions, data.Functions).
+      return pingPromiseAll(lambda, stackName, functionNamesToPing, data.Functions).
         then(function() {
           session.state = 'PINGED';
           return Promise.resolve(session);
@@ -15,14 +23,14 @@ module.exports = function pingFunctions(session) {
     });
 };
 
-function pingPromiseAll(lambda, stackName, uploadedFunctions, functions) {
+function pingPromiseAll(lambda, stackName, uploadedFunctionNames, functions) {
   const pingPromises = [];
 
   for (let i = 0; i < functions.length; ++i) {
     const f = functions[i].FunctionName;
 
-    for (let i = 0; i < uploadedFunctions.length; ++i) {
-      const funcPrefix = `${stackName}-${uploadedFunctions[i].functionName}`;
+    for (let i = 0; i < uploadedFunctionNames.length; ++i) {
+      const funcPrefix = `${stackName}-${uploadedFunctionNames[i]}`;
 
       if (f.startsWith(funcPrefix)) {
         pingPromises.push(pingPromise(lambda, f));

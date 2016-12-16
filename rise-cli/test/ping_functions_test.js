@@ -23,10 +23,12 @@ describe('pingFunctions', function() {
 
     session = {
       stackName: 'foo-stack',
-      compressedFunctions:[
-        { functionName: 'AppIndex' },
-        { functionName: 'AppCreate' }
-      ],
+      functions: {
+        AppIndex: null,
+        AppCreate: {
+          memory: 128
+        }
+      },
       aws: {
         lambda: {
           listFunctions: listFunctionsFn,
@@ -52,5 +54,25 @@ describe('pingFunctions', function() {
           Payload: JSON.stringify({riseTest: 1})
         });
       });
+  });
+
+  context('when bare is true', function() {
+    beforeEach(function() {
+      session.functions.AppIndex = { bare: true };
+    });
+
+    it('does not ping', function() {
+      return pingFunctions(session)
+      .then(function(session) {
+        expect(session).to.not.be.null;
+        expect(listFunctionsFn).to.have.been.calledOnce;
+        expect(listFunctionsFn).to.have.been.calledWith({});
+        expect(invokeFn).to.have.been.calledOnce;
+        expect(invokeFn).to.have.been.calledWith({
+          FunctionName: 'foo-stack-AppCreate-789012',
+          Payload: JSON.stringify({riseTest: 1})
+        });
+      });
+    });
   });
 });

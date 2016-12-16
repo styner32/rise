@@ -24,3 +24,5 @@ functions:
   deleteTask:
   updateTask:
   home:
+  callbacks:
+    bare: true
